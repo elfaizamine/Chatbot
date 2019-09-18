@@ -71,7 +71,7 @@ def encoder():
     Y = np.asarray(output)
 
     # Pretrained embedding matrix matrix for french words
-    pathembMatrix = r'C:\Users\u958336\Desktop\wiki.fr.vec'
+    pathembMatrix = os.path.join(DATA_FOLDER, 'wiki.fr.vec')
     embMatrix = KeyedVectors.load_word2vec_format(pathembMatrix)
 
     embedding_dim = 300
