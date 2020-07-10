@@ -33,40 +33,12 @@ with open(os.path.join(DATA_FOLDER, 'classes.pickle'), 'rb') as handle:
 with open(os.path.join(DATA_FOLDER, 'embedding_matrix.pickle'), 'rb') as handle:
     embedding_matrix = pickle.load(handle)
 
-with open(os.path.join(DATA_FOLDER, 'class_weights.pickle'), 'rb') as handle:
-    class_weights = pickle.load(handle)
 
-maxlen = 10
-word_index = tokenizer.word_index
-embedding_dim = 300
-
-
-x = 0
-for i in WORDS.values():
-    x = x + int(i)
-
-
-
-def P(word, N=548):
-    return int(WORDS[word]) / N
-
-
-def correction(word):
-    return max(candidates(word), key=P)
-
-
-def candidates(word):
-    if word.isalpha():
-        return (known([word]) or known(edits1(word)) or known(edits2(word)) or [word])
-    else:
-        return [word]
-
-
+# Correction of wrong words ; ex: credi --> crédit , saliar --> salaire
 def known(words):
     return set(w for w in words if w in WORDS)
 
-# Correction of words
-def edits1(word):
+def first_degree_combination(word):
     letters = 'abcdefghijklmnopqrstuvwxyzéàèçêùâ'
     splits = [(word[:i], word[i:]) for i in range(len(word) + 1)]
     deletes = [L + R[1:] for L, R in splits if R]
@@ -75,28 +47,28 @@ def edits1(word):
     inserts = [L + c + R for L, R in splits for c in letters]
     return set(deletes + transposes + replaces + inserts)
 
+def second_degree_combination(word):
+    return (e2 for e1 in first_degree_combination(word) for e2 in first_degree_combination(e1))
 
-def edits2(word):
-    return (e2 for e1 in edits1(word) for e2 in edits1(e1))
+
+def candidates(word):
+    if word.isalpha():
+        return known([word]) or known(first_degree_combination(word)) or known(second_degree_combination(word)) or [word]
+    else:
+        return [word]
+ 
+def correction(word, unique_words):
+    return max(candidates(word), key=lambda x: unique_words[x])
 
 
-def decontracted(phrase):
-    pattern = [r"j'",r"c'",r"y'",r"qu'",r"n'",r"t'",r"s'",r"m'",r"l'",r"d'"]
-    replace = ["j ","c ","y ","qui ","n ","t ","s ","m ","l ","d "]
-    
-    for i in range(len(pattern)) : 
-        phrase = re.sub(pattern[i], replace[i], phrase)
-
-    return phrase
-
+# preprocessing functions
 def is_number(s):
     try:
         float(s)
         return True
     except ValueError :
         return False
-
-
+   
 def tag_number(tokens):
     num = []
     for token in tokens:
@@ -105,11 +77,9 @@ def tag_number(tokens):
             tokens[tokens.index(token)] = "nnuumm"
     return tokens, num
 
-
 def clean_up_sentence(sentence):
     num = []
     pattern = sentence.lower()
-    pattern = decontracted(pattern)
     tokens = word_tokenize(pattern)
     num = tag_number(tokens)[1]
     tokens = tag_number(tokens)[0]
@@ -117,22 +87,20 @@ def clean_up_sentence(sentence):
     sentence = TreebankWordDetokenizer().detokenize(filtered_words)
     return sentence, num
 
-
-def preprocessing(sentence):
+def preprocessing(sentence, maxlen=10):
     sequence = tokenizer.texts_to_sequences([sentence])
     sequences = pad_sequences(sequence, maxlen=maxlen)
     return sequences
 
 
-context = {}
-simulateurCredit = {}
-simulateurCreditCE = {}
-messageBlocked = {}
 
-ERROR_THRESHOLD = 0.005
-
-# Ensemble learning to group different predictions and classify
-def classify(sentence):
+# function that classify sentence questions to
+def classify(sentence, maxlen=10, embedding_dim=300, ERROR_THRESHOLD = 0.005):
+    
+    result = []    
+    word_index = tokenizer.word_index
+    
+    # loadind trained models
     allModel = Singleton(word_index, maxlen, embedding_dim, embedding_matrix)
     model0 = allModel[0]
     model1 = allModel[1]
@@ -140,9 +108,13 @@ def classify(sentence):
     model3 = allModel[3]
     model4 = allModel[4]
     model5 = allModel[5]
+    
+    # cleaning sentence input
     clean_sentence = clean_up_sentence(sentence)[0]
     num = clean_up_sentence(sentence)[1]
     sequence = preprocessing(clean_sentence)
+    
+    # predict classes probability
     results0 = model0.predict(sequence)[0]
     results1 = model1.predict(sequence)[0]
     results2 = model2.predict(sequence)[0]
@@ -150,16 +122,22 @@ def classify(sentence):
     results4 = model4.predict(sequence)[0]
     results5 = model5.predict(sequence)[0]
     results = (results0 + results1 + results2 + results3 + results4 + results5) / 6
+    
+    # remove small probability predictions
     results = [[i, r] for i, r in enumerate(results) if r > ERROR_THRESHOLD]
+    
+    # sort prediction classes by probability
     results.sort(key=lambda x: x[1], reverse=True)
+    for r in results:
+        return_list.append((classes[r[0]], r[1]))
+        
+    # if sentence contains number, it must be on of these classes    
     if len(num) != 0:
         results_num = [('giveMeSumCredit', 0.125), ('giveMeDureeCE', 0.125), ('giveMeTaux', 0.125),
                        ('giveMeDuree', 0.125), ('giveMeTauxCE', 0.125), ('giveMeDiff', 0.125),
                        ('giveMeAmount', 0.125), ('giveMeSalary', 0.125)]
-        return results_num
-    return_list = []
-    for r in results:
-        return_list.append((classes[r[0]], r[1]))
-    return return_list
+        result = results_num
+        
+    return result
 
 
