@@ -15,7 +15,6 @@ import json
 import string
 from keras.preprocessing.text import Tokenizer
 from keras import regularizers
-from learning.attention import Attention
 import nltk
 
 settings_dir = os.path.dirname(__file__)
@@ -23,16 +22,19 @@ PROJECT_ROOT = os.path.abspath(os.path.dirname(settings_dir))
 DATA_FOLDER = os.path.join(PROJECT_ROOT, 'learning/data')
 
 # Fonction that train the models
-def encoder():
+def trainModel():
+    
+    # read data files
     with open(os.path.join(DATA_FOLDER, 'input_data.json'), encoding='utf-8') as json_data:
         intents = json.load(json_data)
 
     # set stop words and characters
     nltk.download('stopwords')
     french_stops = (stopwords.words('french'))
-    french_stops.remove('pas')
     french_stops.extend(list(string.punctuation))
     french_stops.extend(['??','a','si','être','avoir','quel','quelle','quels','quoi'])
+    
+    # eliminate stop words and punctuation from data
     words = []
     classes = []
     documents = []
@@ -52,7 +54,7 @@ def encoder():
                 if intent['tag'] not in classes:
                     classes.append(intent['tag'])
 
-    # seperate sentences and labels
+    # seperate sentences (input) and labels (output)
     text = []
     output = []
     for doc in documents:
@@ -62,7 +64,7 @@ def encoder():
 
     # parameters of sequence length
     maxlen = 10
-    # tokenisation and transforming to sequences of integers
+    # tokenisation and transforming sequences of words to sequences of integers
     tokenizer = Tokenizer()
     tokenizer.fit_on_texts(text)
     sequences = tokenizer.texts_to_sequences(text)
@@ -85,18 +87,8 @@ def encoder():
         if embedding_vector is not None:
             embedding_matrix[i] = embedding_vector
             
-    class_weights1 = class_weight.compute_class_weight('balanced',np.unique(Y),Y)
-    
-    # diminish the weight for the classes where there is a context
-    class_weights = {}
-    for i in range(34):
-        if i in (25,26,27,28,29,30,31,32):
-            class_weights[i] = 0.4
-        else:
-            class_weights[i] = class_weights1[i]
-       
-    
-    ## Models
+          
+    ## Models Architecture and training
     _input = Input(shape=[maxlen], dtype='int32')
     embedded = Embedding(len(word_index)+1, embedding_dim,input_length=maxlen,weights = [embedding_matrix],trainable = True)(_input)
     model = Conv1D(filters = 128, kernel_size = 2,strides = 1,activation='relu',padding = 'same')(embedded)
@@ -119,7 +111,7 @@ def encoder():
     model1 = Dense(34, activation='softmax')(model1)
     model1 = Model(input=_input, output=model1)
     model1.compile(optimizer='adam',loss='sparse_categorical_crossentropy',metrics=['sparse_categorical_accuracy'])
-    model1.fit(X,Y,epochs=25,batch_size=16, class_weight = class_weights)
+    model1.fit(X,Y,epochs=25,batch_size=16)
     
     _input = Input(shape=[maxlen], dtype='int32')
     embedded = Embedding(len(word_index)+1, embedding_dim,input_length=maxlen,weights = [embedding_matrix],trainable = True )(_input)
@@ -129,7 +121,7 @@ def encoder():
     model2 = Dense(34, activation='softmax')(model2)
     model2 = Model(input=_input, output=model2)
     model2.compile(optimizer='adam',loss='sparse_categorical_crossentropy',metrics=['sparse_categorical_accuracy'])
-    model2.fit(X,Y,epochs=50,batch_size=16, class_weight = class_weights)
+    model2.fit(X,Y,epochs=50,batch_size=16)
     
     _input = Input(shape=[maxlen], dtype='int32')
     embedded = Embedding(len(word_index)+1, embedding_dim,input_length=maxlen,weights = [embedding_matrix],trainable = True )(_input)
@@ -139,7 +131,7 @@ def encoder():
     model3 = Dense(34, activation='softmax')(model3)
     model3 = Model(input=_input, output=model3)
     model3.compile(optimizer='adam',loss='sparse_categorical_crossentropy',metrics=['sparse_categorical_accuracy'])
-    model3.fit(X,Y,epochs=25,batch_size=16, class_weight = class_weights)
+    model3.fit(X,Y,epochs=25,batch_size=16)
     
     _input = Input(shape=[maxlen], dtype='int32')
     embedded = Embedding(len(word_index)+1, embedding_dim,input_length=maxlen,weights = [embedding_matrix],trainable = True )(_input)
@@ -148,7 +140,7 @@ def encoder():
     model4 = Dense(34, activation='softmax')(model4)
     model4 = Model(input=_input, output=model4)
     model4.compile(optimizer='adam',loss='sparse_categorical_crossentropy',metrics=['sparse_categorical_accuracy'])
-    model4.fit(X,Y,epochs=35,batch_size=16, class_weight = class_weights)
+    model4.fit(X,Y,epochs=35,batch_size=16)
     
     _input = Input(shape=[maxlen], dtype='int32')
     embedded = Embedding(len(word_index)+1, embedding_dim,input_length=maxlen,weights = [embedding_matrix],trainable = True)(_input)
@@ -159,32 +151,24 @@ def encoder():
     model5 = Dense(34, activation='softmax')(model5)
     model5 = Model(input=_input, output=model5)
     model5.compile(optimizer='adam',loss='sparse_categorical_crossentropy',metrics=['sparse_categorical_accuracy'])
-    model5.fit(X,Y,epochs=45,batch_size=16, class_weight = class_weights)
+    model5.fit(X,Y,epochs=45,batch_size=16)
 
-    # Create dictionnary for saving correct words and frequences
-
-    repository = []
-    for intent in intents['intents']:
-        if 'patterns' in intent:
-            for pattern in intent['patterns']:
-                pattern = pattern.lower()
-                tokens = WordPunctTokenizer().tokenize(pattern)
-                filtered_words = [w for w in tokens if not w in french_stops]
-                repository.extend(filtered_words)
-                
-    for i in repository:
+    
+    # remove numbers for words dictionnary              
+    for i in words:
         if not i.isalpha():
             repository.remove(i)
-    WORDS = Counter(repository)
-
+    WORDS = Counter(words)
+    
+    # save trained models and useful data files
+    
     model.save_weights(os.path.join(DATA_FOLDER, 'weights_model.h5'))
     model1.save_weights(os.path.join(DATA_FOLDER, 'weights_model1.h5'))
     model2.save_weights(os.path.join(DATA_FOLDER, 'weights_model2.h5'))
     model3.save_weights(os.path.join(DATA_FOLDER, 'weights_model3.h5'))
     model4.save_weights(os.path.join(DATA_FOLDER, 'weights_model4.h5'))
     model5.save_weights(os.path.join(DATA_FOLDER, 'weights_model5.h5'))
-
-
+    
     with open(os.path.join(DATA_FOLDER, 'tokenizer.pickle'), 'wb') as handle:
         pickle.dump(tokenizer, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
@@ -200,7 +184,4 @@ def encoder():
     with open(os.path.join(DATA_FOLDER, 'embedding_matrix.pickle'), 'wb') as handle:
         pickle.dump(embedding_matrix, handle, protocol=pickle.HIGHEST_PROTOCOL)
         
-    with open(os.path.join(DATA_FOLDER, 'class_weights.pickle'), 'wb') as handle:
-        pickle.dump(class_weights, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
 
