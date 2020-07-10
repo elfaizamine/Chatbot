@@ -22,7 +22,7 @@ PROJECT_ROOT = os.path.abspath(os.path.dirname(settings_dir))
 DATA_FOLDER = os.path.join(PROJECT_ROOT, 'learning/data')
 
 # Fonction that train the models
-def trainModel():
+def trainModels():
     
     # read data files
     with open(os.path.join(DATA_FOLDER, 'input_data.json'), encoding='utf-8') as json_data:
