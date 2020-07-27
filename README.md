@@ -1,4 +1,4 @@
-TEXT CLASSIFICATION
+Text Classification
 ==============================
 Train deep learning models to classify sentences into proper response
 
