@@ -54,7 +54,6 @@ class TextPreprocessing:
         """
         sentence cleaning
         """
-        self.load_data()
         clean_sentence, numbers = self.clean_up_sentence(sentence)
         clean_num_sentence = self.transform_test_numeric(clean_sentence)
         
