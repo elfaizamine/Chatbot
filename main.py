@@ -48,6 +48,7 @@ class Response:
 
         cleaner = TextPreprocessing()
         cleaner.load_data()  # load needed data for input cleaning
+        self.load_data()  # load needed data for model predicting
 
         result = []  # list of predictions
 
